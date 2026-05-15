@@ -7,9 +7,9 @@ the current complex and time-consuming methods. However, most LLM judges are uns
 
  *Twelve Angry LLMs* supports the following tasks:
 
-- Text generation (agreement via token overlap)
-- Classification (single- or multi-label agreement)
-- Ranking (agreement via rank correlation)
+- Open-ended text generation
+- Text/Image Classification
+- Text/Image Ranking
 
 Modular design:
 - Tasks: Generation, Classification, Ranking
