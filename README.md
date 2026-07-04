@@ -1,9 +1,6 @@
 # Twelve Angry LLMs (work in progress)
 
-*LLM-as-a-judge* is an emerging AI evaluation method where a large language model (LLM) assesses the quality of other LLM-generated outputs based on predefined criteria, acting like a human judge by identifying strengths and weaknesses. It's a technology with remarkable potential because it can partially replace
-the current complex and time-consuming methods. However, most LLM judges are unstable.
-
-*Twelve Angry LLMs* library builds an LLM jury to measure agreement among multiple LLM judges which increases their stability and improves the performance.
+*LLM-as-a-judge* is an emerging AI evaluation method where a large language model (LLM) assesses the quality and acts as an evaluator. LLM-as-a-judge has remarkable potential because it can replace the complex and effort-heavy methods, especially when it comes to open-ended evaluation. *Twelve Angry LLMs* library builds an LLM jury with multiple LLM judges to increases the stability and reliability of the final verdict. It's an experimental project to explore how agreement can be measured and a final verdict can be cast, from the decision of several LLMs.
 
  *Twelve Angry LLMs* supports the following tasks:
 
