@@ -1,0 +1,26 @@
+# Default five-judge cross-family panel (see RESEARCH_PLAN.md §1 and H2).
+# Keys are read from environment variables; nothing secret lives in this file.
+metric: kendall
+cache: .tal/cache.sqlite
+judges:
+  - name: gpt-4o
+    model: gpt-4o-2024-08-06
+    provider: openai
+  - name: claude-sonnet
+    model: claude-sonnet-5
+    provider: anthropic
+  - name: qwen-72b
+    model: qwen/qwen-2.5-72b-instruct
+    provider: openai
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+  - name: llama-70b
+    model: meta-llama/llama-3.3-70b-instruct
+    provider: openai
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+  - name: mistral-large
+    model: mistralai/mistral-large-2411
+    provider: openai
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY

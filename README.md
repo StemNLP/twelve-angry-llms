@@ -1,18 +1,21 @@
-# Twelve Angry LLMs (work in progress)
+# Twelve Angry LLMs
 
-*LLM-as-a-judge* is an emerging AI evaluation method where a large language model (LLM) assesses the quality and acts as an evaluator. LLM-as-a-judge has remarkable potential because it can replace the complex and effort-heavy methods, especially when it comes to open-ended evaluation. *Twelve Angry LLMs* library builds an LLM jury with multiple LLM judges to increases the stability and reliability of the final verdict. It's an experimental project to explore how agreement can be measured and a final verdict can be cast, from the decision of several LLMs.
+**Panel-based reliability annotation for preference data.**
 
- *Twelve Angry LLMs* supports the following tasks:
+Modern preference datasets are built by asking a *single* strong judge to
+score or rank candidate responses, then collapsing its verdict into
+`(chosen, rejected)` pairs for DPO or reward-model training. That collapse
+throws away any notion of how *contestable* each label was.
 
-- Open-ended text generation
-- Text/Image Classification
-- Text/Image Ranking
-
-Modular design:
-- Tasks: Generation, Classification, Ranking
-- Judge: prompts an LLM and normalizes outputs
-- Jury: orchestrates judges and computes agreement
-- LLMClient: plug any provider (OpenAI, HF, local), via a simple generate(prompt, ...) interface
+`twelve-angry-llms` recovers that signal: it runs a **panel of diverse LLM
+judges** over each `(prompt, K responses)` datapoint and measures how much
+the judges agree with each other — the **inter-judge agreement (IJA)**,
+computed as average pairwise Kendall's τ-b over the judges' rankings. High
+IJA means the label is trustworthy; low IJA means it is shaky and likely to
+inject noise into training. The result exports straight into TRL's
+`(prompt, chosen, rejected)` schema with the reliability signals attached,
+so you can filter, down-weight, or soft-label your data and run your
+existing training setup unchanged.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -20,108 +23,116 @@ Modular design:
 ## Installation
 
 ```bash
-pip install twelve-angry-llms
+pip install twelve-angry-llms                # core (OpenAI-compatible providers)
+pip install "twelve-angry-llms[anthropic]"   # + native Anthropic client
+pip install "twelve-angry-llms[data]"        # + raw UltraFeedback / Nectar loaders
 ```
 
 ## Quickstart
 
-Below is a minimal, self-contained example using a tiny mock client. Replace the mock with your provider by implementing LLMClient.
+Judges can live anywhere: any OpenAI-compatible endpoint (OpenAI,
+OpenRouter, Together, Groq, a local vLLM or Ollama server, ...) or the
+Anthropic API. Keys are read from environment variables — pass
+`api_key_env` to point at a different variable per provider.
 
 ```python
-from twelve_angry_llms.tasks import GenerationTask, ClassificationTask, RankingTask
-from twelve_angry_llms.judge import Judge
-from twelve_angry_llms.jury import Jury
-from twelve_angry_llms.clients.base import LLMClient
-
-# Mock clients returning deterministic outputs for demonstration
-class FixedClient:
-    def __init__(self, text): self.text = text
-    def generate(self, prompt: str, **kwargs) -> str: return self.text
-
-# 1) Generation agreement (token Jaccard over pairwise outputs)
-gen_task = GenerationTask(input_text="Summarize: LLMs are used for many NLP tasks.")
-judges_gen = [
-    Judge("gpt-A", FixedClient("LLMs are widely used in NLP tasks.")),
-    Judge("gpt-B", FixedClient("Large language models power many NLP applications.")),
-    Judge("gpt-C", FixedClient("LLMs are used for various NLP tasks.")),
-]
-jury = Jury(judges_gen)
-gen_result = jury.evaluate(gen_task)
-print("Generation agreement:", gen_result.agreement)
-
-# 2) Classification agreement (single-label exact match)
-cls_task = ClassificationTask(
-    input_text="The service was quick and friendly.",
-    labels=["positive", "neutral", "negative"],
-    multi_label=False,
+from twelve_angry_llms import (
+    Judge, Panel, PreferenceDatapoint, ScoringProtocol,
+    OpenAICompatibleClient, to_records, to_jsonl,
 )
-judges_cls = [
-    Judge("cls-A", FixedClient("positive")),
-    Judge("cls-B", FixedClient("positive")),
-    Judge("cls-C", FixedClient("neutral")),
-]
-print("Classification agreement:", Jury(judges_cls).evaluate(cls_task).agreement)
+from twelve_angry_llms.clients import AnthropicClient
 
-# 3) Ranking agreement (pairwise Spearman rho)
-rank_task = RankingTask(
-    items=["Alpha", "Beta", "Gamma"],
-    criteria="usefulness",
+openai = OpenAICompatibleClient()                       # OPENAI_API_KEY
+openrouter = OpenAICompatibleClient(
+    base_url="https://openrouter.ai/api/v1",
+    api_key_env="OPENROUTER_API_KEY",
 )
-judges_rank = [
-    Judge("rank-A", FixedClient("Alpha\nBeta\nGamma")),
-    Judge("rank-B", FixedClient("Beta\nAlpha\nGamma")),
-    Judge("rank-C", FixedClient("Alpha\nGamma\nBeta")),
+panel = Panel([
+    Judge(model="gpt-4o-2024-08-06", client=openai),
+    Judge(model="claude-sonnet-5", client=AnthropicClient()),
+    Judge(model="qwen/qwen-2.5-72b-instruct", client=openrouter),
+])
+
+datapoints = [
+    PreferenceDatapoint(
+        prompt="What causes tides?",
+        responses=(
+            "The gravitational pull of the moon and sun.",
+            "Mostly wind patterns over the ocean.",
+            "The moon's gravity, with a smaller solar contribution.",
+        ),
+    ),
 ]
-print("Ranking agreement:", Jury(judges_rank).evaluate(rank_task).agreement)
+
+results = panel.annotate_sync(datapoints, ScoringProtocol())
+print(results[0].ija)              # panel agreement on this datapoint, in [-1, 1]
+print(panel.diagnostics(results))  # Krippendorff's alpha, judge-judge correlations
+
+to_jsonl(to_records(results), "annotated.jsonl")  # TRL schema + IJA columns
 ```
 
-## API Overview
+Each exported record carries:
 
-- Tasks (twelve_angry_llms.tasks)
-  - GenerationTask(input_text: str, guidance: Optional[str] = None)
-  - ClassificationTask(input_text: str, labels: List[str], multi_label: bool = False)
-  - RankingTask(items: List[str], criteria: Optional[str] = None)
+| column | meaning |
+|---|---|
+| `prompt`, `chosen`, `rejected` | the standard TRL/DPO interface |
+| `prompt_ija` | panel agreement over all K candidates (Kendall's τ-b) |
+| `pair_agreement` | fraction of judges preferring chosen over rejected — usable directly as a soft label for conservative DPO / soft-label methods |
+| `judge_values` | raw per-judge scores or rankings |
 
-- Judge (twelve_angry_llms.judge)
-  - Judge(name: str, client: LLMClient, temperature: float = 0.0)
-  - predict(task) -> JudgeOutput
+## Two elicitation protocols
 
-- Jury (twelve_angry_llms.jury)
-  - Jury(judges: List[Judge])
-  - evaluate(task) -> JuryResult
-    - JuryResult.agreement: float in [0, 1] (higher is better)
-    - JuryResult.outputs: per-judge raw/normalized outputs
-    - JuryResult.details: pairwise scores and extra info
+- **`ScoringProtocol`** — every judge scores each response 1–5 against a
+  shared rubric (the UltraFeedback style). Also yields per-judge score
+  margins for free.
+- **`RankingProtocol`** — every judge orders all K responses best-to-worst
+  in one pass (the Nectar style).
 
-- LLMClient protocol (twelve_angry_llms.clients.base)
-  - generate(prompt: str, system: Optional[str] = None, **kwargs) -> str
+Both parse into per-response utilities, so IJA and all exports work
+identically. Judges receiving one shared guideline per protocol is the
+point: any disagreement then reflects the judges, not prompt wording.
 
-## Agreement Metrics (default)
-- Generation: average pairwise Jaccard similarity over token sets
-- Classification (single): average pairwise exact match
-- Classification (multi): average pairwise Jaccard over label sets
-- Ranking: average pairwise Spearman rank correlation (no ties)
+## Command line
 
-These are simple, dependency-free defaults. You can later swap in stronger metrics (e.g., Krippendorff’s alpha, Kendall’s tau-b, embedding similarity).
-
-## Using Your Own Provider
-
-Implement LLMClient and pass it to Judge.
-
-```python
-from twelve_angry_llms.clients.base import LLMClient
-
-class MyProvider(LLMClient):
-    def generate(self, prompt: str, system: str | None = None, **kwargs) -> str:
-        # call your model here and return the text
-        return "model output"
-
-# Judge("my-judge", MyProvider())
+```bash
+tal annotate --input data.jsonl --panel panel.yaml --output annotated.jsonl
+tal export   --input annotated.jsonl --output pairs.jsonl
 ```
 
-## Contributing
+`data.jsonl` rows need `prompt` and `responses`; `panel.yaml` declares the
+judges and (optionally) a response cache:
 
-Contributions are welcome! Please see CONTRIBUTING.md for guidelines.
+```yaml
+metric: kendall
+cache: .tal/cache.sqlite
+judges:
+  - model: gpt-4o-2024-08-06
+    provider: openai
+  - model: claude-sonnet-5
+    provider: anthropic
+  - model: qwen/qwen-2.5-72b-instruct
+    provider: openai
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+```
+
+With the `data` extra you can annotate the raw (non-binarized) datasets
+directly: `tal annotate --dataset ultrafeedback --limit 1000 ...`.
+
+## Reproducibility
+
+- Temperature defaults to 0 everywhere.
+- `CachedClient` / the `cache:` key stores every raw response in SQLite,
+  keyed on (model, sampling settings, messages) — re-runs never re-bill.
+- Clients track token usage (`client.usage`) so runs can report cost.
+
+## The research
+
+This library is the instrument for an ongoing study of IJA as a
+label-reliability signal — hypotheses, judging protocol, and experimental
+phases live in [research/RESEARCH_PLAN.md](research/RESEARCH_PLAN.md).
+Working title: *"Twelve Angry LLMs: Judge Agreement as a Label-Reliability
+Signal for Preference Data."*
 
 ## License
 

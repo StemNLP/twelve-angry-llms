@@ -324,21 +324,24 @@ Using IJA to gate or scale per-prompt rewards inside GRPO-style group-relative R
 prompts with low panel agreement contribute less to the advantage estimate. This reuses the
 same panel machinery at the RL stage rather than the data-curation stage.
 
-## 9. Library and API starting points
+## 9. Library status
 
-1. Add a `ScoringTask` that asks each judge to score the K responses in a group against the
-   shared 1–5 rubric, with per-judge score extraction; keep the existing `RankingTask` for
-   judges that rank directly.
-2. Extend `JuryResult` with an `ija` field (average pairwise Kendall's τ-b, tie-aware) next to
-   the existing `agreement`, plus dataset-level diagnostics (Krippendorff's α and the
-   judge–judge correlation matrix).
-3. Build the **exporter**: a Hugging Face dataset in TRL's `(prompt, chosen, rejected)` schema
-   with `prompt_ija`, `pair_agreement`, and `judge_scores` columns, so it drops straight into
-   `DPOTrainer`.
-4. Implement real `LLMClient` backends for three providers, with a response cache.
-5. Run the pilot: 200 UltraFeedback prompts, 4 responses each, 3 judges, clean versus
-   corrupted, to confirm the scores parse, that τ-b actually spreads across datapoints, and
-   that a blatant flip visibly tanks IJA. Then scale up to Phase 1.
+The instrument is implemented as the `twelve-angry-llms` package (v0.2.0, `src/`), with the
+study-specific material kept separate in `research/`. The plan's concepts map to the package
+as follows: `ScoringProtocol` and `RankingProtocol` implement the two elicitation styles of
+§4 with shared prompts and validated parsing; `Panel` fans judges out asynchronously and
+computes per-datapoint IJA (tie-aware Kendall's τ-b by default, Spearman and pairwise-winner
+selectable for the metric ablation) plus the dataset-level diagnostics (Krippendorff's α and
+the judge–judge correlation matrix); the exporter emits TRL's `(prompt, chosen, rejected)`
+schema with `prompt_ija`, `pair_agreement`, and the raw per-judge values; clients cover any
+OpenAI-compatible endpoint plus native Anthropic, with a SQLite response cache and token-usage
+tracking satisfying the §7 rigor items; and raw UltraFeedback/Nectar loaders preserve the
+original scores and ranks in metadata for the margin baselines.
+
+The remaining step before Phase 1 is the pilot (`research/experiments/pilot.py`): 200
+UltraFeedback prompts, half corrupted via `research/experiments/corruptions.py`, run through
+a small panel to confirm the outputs parse, that τ-b actually spreads across datapoints, and
+that a blatant flip visibly tanks the corrupted pair's agreement. Then scale up to Phase 1.
 
 ## 10. Reading list (priority order)
 

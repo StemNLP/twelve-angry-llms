@@ -1,17 +1,45 @@
 [project]
 name = "twelve-angry-llms"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.2.0"
+description = "Panel-based reliability annotation for preference data: measure inter-judge agreement (IJA) with a panel of LLM judges and export TRL-ready DPO data with reliability signals attached."
 readme = "README.md"
+license = { file = "LICENSE" }
 authors = [
     { name = "meghdadFar", email = "meghdad.farahmand@gmail.com" }
 ]
+keywords = ["llm-as-a-judge", "preference-data", "dpo", "rlhf", "data-curation", "inter-judge-agreement"]
 requires-python = ">=3.11"
 dependencies = [
-    "openai>=1.0.0",
-    "pydantic>=2.0.0",
+    "openai>=1.40.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+anthropic = ["anthropic>=0.34.0"]
+data = ["datasets>=2.19.0"]
+all = ["twelve-angry-llms[anthropic,data]"]
+
+[project.scripts]
+tal = "twelve_angry_llms.cli:main"
+
+[project.urls]
+Repository = "https://github.com/meghdadFar/twelve-angry-llms"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.5",
 ]
 
 [build-system]
 requires = ["uv_build>=0.8.10,<0.9.0"]
 build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 96
+target-version = "py311"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
