@@ -133,12 +133,8 @@ judge's ordering.
 we can check that the two protocols flag substantially the same low-agreement datapoints
 i.e. that IJA measures a property of the data rather than of the elicitation format.
 
-**Fixed candidate strings.** Every judge must score the identical K response texts for a given
+**Fixed candidate strings.** Every judge must score the exact identical K response texts for a given
 prompt, so that any disagreement reflects the judges and not drift in the inputs.
-
-**A reproduction baseline.** Because UltraFeedback's original template is public, we include a
-run in which one panel member uses that exact template, letting us confirm our pipeline
-reproduces the published GPT-4 labels before we introduce the rest of the panel.
 
 ## 5. Related work and positioning
 
@@ -146,15 +142,27 @@ reproduces the published GPT-4 labels before we introduce the rest of the panel.
 about 60–75% of the time, and disagree on 30–50% of the subtle comparisons; the
 [data-centric RLHF metrics paper](https://arxiv.org/pdf/2409.09603) explicitly floats
 annotator disagreement as a filter for low-quality preference data but does not build one.
-That unbuilt suggestion is close to our thesis and worth citing prominently.
 
-**Others make training tolerate noise rather than remove it.** Work such as
-[provably robust DPO](https://arxiv.org/pdf/2403.00409) and
+Work such as [provably robust DPO](https://arxiv.org/pdf/2403.00409) and
 [soft preference labels](https://arxiv.org/pdf/2409.06691) changes the loss so that noisy
-labels hurt less. This is complementary to us: they cope with noise during training, we
-identify it beforehand, and in fact our soft-label output feeds directly into their methods.
+labels hurt less. This is complementary to us: while they confirm that the noise exists,
+they cope with it during training, we
+identify it beforehand. But our soft-label output feeds directly into their methods.
+Concretely, each of these losses has a per-pair uncertainty knob that the method itself
+cannot measure. Conservative and provably robust DPO model each label as flipped with some
+probability ε, but because standard datasets ship only hard chosen/rejected labels, ε has to
+be set as a single global hyperparameter — guessed, or tuned by sweep — and applied uniformly
+to clean and noisy pairs alike. Soft-label methods like geometric-averaged preference
+optimization go further and consume a per-pair probability p that the chosen response really
+is preferred, but in their experiments p comes from simulated annotators, since real datasets
+do not provide it. Our `pair_agreement` column is precisely the missing measurement: the
+fraction of panel judges preferring chosen over rejected is a direct per-datapoint estimate
+of their p (equivalently, ε̂ = 1 − `pair_agreement`). Plugging it in requires no change to
+their loss code — it upgrades a global guessed constant into a measured per-example quantity,
+and gives us a third way to use IJA in Phase 3 (soft-labeling) alongside filtering and
+down-weighting.
 
-**The null result we must beat.** A recent
+**Counterargument against this hypothesis.** A recent
 [preference-dataset curation study](https://arxiv.org/pdf/2511.10985) reports that
 UltraFeedback and LMSYS are "fairly robust to label flipping," meaning DPO may simply shrug
 off the very noise we propose to filter. Phase 3 has to show a real gain over both no
