@@ -1,5 +1,11 @@
 # Twelve Angry LLMs
 
+[![PyPI](https://img.shields.io/pypi/v/twelve-angry-llms)](https://pypi.org/project/twelve-angry-llms/)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://pypi.org/project/twelve-angry-llms/)
+[![Downloads](https://img.shields.io/pypi/dm/twelve-angry-llms)](https://pypistats.org/packages/twelve-angry-llms)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+
 **Panel-based reliability annotation for preference data.**
 
 Modern preference datasets are built by asking a *single* strong judge to
@@ -17,15 +23,14 @@ inject noise into training. The result exports straight into TRL's
 so you can filter, down-weight, or soft-label your data and run your
 existing training setup unchanged.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-
 ## Installation
 
 ```bash
-pip install twelve-angry-llms          # core: OpenRouter + any OpenAI-compatible provider
-pip install "twelve-angry-llms[data]"  # + raw UltraFeedback / Nectar loaders
+uv add twelve-angry-llms            # core: OpenRouter + any OpenAI-compatible provider
+uv add "twelve-angry-llms[data]"    # + raw UltraFeedback / Nectar loaders
 ```
+
+(or `pip install twelve-angry-llms` if you're not on [uv](https://docs.astral.sh/uv/) yet)
 
 ## Quickstart
 
