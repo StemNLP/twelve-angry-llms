@@ -96,19 +96,10 @@ natural but separate line of work, noted here as future direction (§8).
 
 ## 4. The judging protocol
 
-Because the shipped datasets used a single judge, we cannot read IJA off them — we have to run
-the panel ourselves. This is not a workaround; generating the panel *is* the method, and the
-original single judge's label simply becomes one more baseline to compare against. The cost is
-modest: judging a thousand prompts with five cheap models is on the order of twenty thousand
-API calls to mini/haiku/flash-tier models, which is a few dollars and an afternoon.
+Because the mentioned datasets used a single judge, we cannot calculate IJA off them. We have to run
+the panel ourselves. We start with judging a thousand prompts with several models.
 
-Three protocol decisions keep the experiment clean:
-
-**One shared rubric across all judges.** Every judge receives the *same* scoring guideline —
-the definition of what a score of 1 through 5 means — and is asked to score the K responses
-against it. We do not reuse each dataset's original judge prompt, because if judges were given
-different instructions their disagreement would conflate rubric differences with genuine
-judgment differences. UltraFeedback releases its full annotation template (in
+**One shared rubric across all judges.** Every judge receives the *same* scoring guideline. The definition of what a score of 1 through 5 means and is asked to score the K responses against it. We do not reuse each dataset's original judge prompt. We create a unified one for all judges. UltraFeedback releases its full annotation template (in
 `src/data_annotation/preference_templates.py`), so we adopt that as the canonical shared rubric;
 Nectar publishes only an excerpt of its rubric and defers the position-bias handling to an
 unreleased writeup, so it cannot serve as a reproducible template. We standardize on
