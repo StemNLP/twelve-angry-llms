@@ -82,3 +82,28 @@ class OpenAICompatibleClient:
             self.usage.add(response.usage.prompt_tokens, response.usage.completion_tokens)
         content = response.choices[0].message.content
         return content or ""
+
+
+class OpenRouterClient(OpenAICompatibleClient):
+    """OpenAI-compatible client preconfigured for OpenRouter.
+
+    The recommended way to run a cross-family panel behind a single API
+    key (``OPENROUTER_API_KEY``). For reproducible runs, pin each judge's
+    upstream provider and precision via ``extra_body`` - see
+    ``OpenAICompatibleClient`` for the format.
+    """
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        api_key_env: str = "OPENROUTER_API_KEY",
+        extra_body: dict | None = None,
+        **client_kwargs,
+    ) -> None:
+        super().__init__(
+            api_key=api_key,
+            base_url="https://openrouter.ai/api/v1",
+            api_key_env=api_key_env,
+            extra_body=extra_body,
+            **client_kwargs,
+        )

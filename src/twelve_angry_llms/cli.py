@@ -13,18 +13,19 @@ defines the judges:
     metric: kendall            # optional: kendall | spearman | winner
     cache: .tal/cache.sqlite   # optional: response cache path
     judges:
-      - model: gpt-4o-2024-08-06
-        provider: openai                  # openai-compatible endpoint
-      - model: claude-sonnet-5
-        provider: anthropic
+      - model: openai/gpt-4o-2024-08-06
+        provider: openrouter              # the default
       - model: qwen/qwen-2.5-72b-instruct
-        provider: openai
-        base_url: https://openrouter.ai/api/v1
-        api_key_env: OPENROUTER_API_KEY
+        provider: openrouter
         extra_body:                       # optional: merged into requests,
           provider:                       # e.g. OpenRouter provider pinning
             order: [together]
             allow_fallbacks: false
+      - model: claude-sonnet-5            # direct provider APIs also work
+        provider: anthropic
+      - model: llama3.1:70b               # any OpenAI-compatible endpoint
+        provider: openai
+        base_url: http://localhost:11434/v1
 
 API keys are never written in the file - each judge names the environment
 variable holding its key (``api_key_env``), defaulting to OPENAI_API_KEY
@@ -39,7 +40,7 @@ import sys
 from pathlib import Path
 
 from .cache import CachedClient, ResponseCache
-from .clients.openai_compat import OpenAICompatibleClient
+from .clients.openai_compat import OpenAICompatibleClient, OpenRouterClient
 from .export import to_jsonl, to_records
 from .judge import Judge
 from .panel import Panel
@@ -59,12 +60,17 @@ def _load_panel(path: Path) -> tuple[Panel, ResponseCache | None]:
     cache = ResponseCache(config["cache"]) if config.get("cache") else None
     judges = []
     for spec in config["judges"]:
-        provider = spec.get("provider", "openai")
+        provider = spec.get("provider", "openrouter")
         if provider == "anthropic":
             from .clients.anthropic_client import AnthropicClient
 
             client = AnthropicClient(
                 api_key_env=spec.get("api_key_env", "ANTHROPIC_API_KEY")
+            )
+        elif provider == "openrouter":
+            client = OpenRouterClient(
+                api_key_env=spec.get("api_key_env", "OPENROUTER_API_KEY"),
+                extra_body=spec.get("extra_body"),
             )
         elif provider in ("openai", "openai-compatible"):
             client = OpenAICompatibleClient(
@@ -74,7 +80,8 @@ def _load_panel(path: Path) -> tuple[Panel, ResponseCache | None]:
             )
         else:
             raise SystemExit(
-                f"Unknown provider {provider!r} (use 'openai', 'openai-compatible', or 'anthropic')"
+                f"Unknown provider {provider!r} "
+                "(use 'openrouter', 'openai', 'openai-compatible', or 'anthropic')"
             )
         if cache is not None:
             client = CachedClient(client, cache)

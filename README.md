@@ -30,26 +30,19 @@ pip install "twelve-angry-llms[data]"        # + raw UltraFeedback / Nectar load
 
 ## Quickstart
 
-Judges can live anywhere: any OpenAI-compatible endpoint (OpenAI,
-OpenRouter, Together, Groq, a local vLLM or Ollama server, ...) or the
-Anthropic API. Keys are read from environment variables — pass
-`api_key_env` to point at a different variable per provider.
+The easiest way to run a cross-family panel is a single
+[OpenRouter](https://openrouter.ai) key — one account, hundreds of models:
 
 ```python
 from twelve_angry_llms import (
     Judge, Panel, PreferenceDatapoint, ScoringProtocol,
-    OpenAICompatibleClient, to_records, to_jsonl,
+    OpenRouterClient, to_records, to_jsonl,
 )
-from twelve_angry_llms.clients import AnthropicClient
 
-openai = OpenAICompatibleClient()                       # OPENAI_API_KEY
-openrouter = OpenAICompatibleClient(
-    base_url="https://openrouter.ai/api/v1",
-    api_key_env="OPENROUTER_API_KEY",
-)
+openrouter = OpenRouterClient()  # reads OPENROUTER_API_KEY
 panel = Panel([
-    Judge(model="gpt-4o-2024-08-06", client=openai),
-    Judge(model="claude-sonnet-5", client=AnthropicClient()),
+    Judge(model="openai/gpt-4o-2024-08-06", client=openrouter),
+    Judge(model="anthropic/claude-sonnet-4.5", client=openrouter),
     Judge(model="qwen/qwen-2.5-72b-instruct", client=openrouter),
 ])
 
@@ -69,6 +62,22 @@ print(results[0].ija)              # panel agreement on this datapoint, in [-1, 
 print(panel.diagnostics(results))  # Krippendorff's alpha, judge-judge correlations
 
 to_jsonl(to_records(results), "annotated.jsonl")  # TRL schema + IJA columns
+```
+
+Judges aren't tied to OpenRouter: `OpenAICompatibleClient` speaks to any
+OpenAI-compatible endpoint (OpenAI directly, Together, Groq, a local vLLM
+or Ollama server, ...) via its `base_url`, and `AnthropicClient` (the
+`[anthropic]` extra) talks to the Anthropic API natively. Keys are read
+from environment variables — pass `api_key_env` to point at a different
+variable per provider.
+
+```python
+from twelve_angry_llms import OpenAICompatibleClient
+from twelve_angry_llms.clients import AnthropicClient
+
+openai = OpenAICompatibleClient()                              # OPENAI_API_KEY
+claude = AnthropicClient()                                     # ANTHROPIC_API_KEY
+local = OpenAICompatibleClient(base_url="http://localhost:11434/v1", api_key="-")
 ```
 
 Each exported record carries:
@@ -106,33 +115,30 @@ judges and (optionally) a response cache:
 metric: kendall
 cache: .tal/cache.sqlite
 judges:
-  - model: gpt-4o-2024-08-06
-    provider: openai
-  - model: claude-sonnet-5
-    provider: anthropic
+  - model: openai/gpt-4o-2024-08-06
+    provider: openrouter                 # the default
   - model: qwen/qwen-2.5-72b-instruct
+    provider: openrouter
+  - model: claude-sonnet-5              # direct provider APIs also work
+    provider: anthropic
+  - model: llama3.1:70b                 # ... as does any OpenAI-compatible endpoint
     provider: openai
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
+    base_url: http://localhost:11434/v1
 ```
 
 With the `data` extra you can annotate the raw (non-binarized) datasets
 directly: `tal annotate --dataset ultrafeedback --limit 1000 ...`.
 
-### Routing all judges through one aggregator
+### Reproducible OpenRouter runs
 
-Since the client accepts any OpenAI-compatible `base_url`, the easiest way
-to run a cross-family panel is a single aggregator key (e.g. OpenRouter).
-One caveat: aggregators load-balance open-weight models across hosts with
-different quantizations, which can silently change judge behavior between
-runs. Pin the routing with `extra_body` (merged into every request, and
-part of the response-cache key):
+One caveat with aggregators: they load-balance open-weight models across
+hosts with different quantizations, which can silently change judge
+behavior between runs. Pin the routing with `extra_body` (merged into
+every request, and part of the response-cache key):
 
 ```yaml
   - model: qwen/qwen-2.5-72b-instruct
-    provider: openai
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
+    provider: openrouter
     extra_body:
       provider: {order: [together], allow_fallbacks: false, quantizations: [fp16]}
 ```

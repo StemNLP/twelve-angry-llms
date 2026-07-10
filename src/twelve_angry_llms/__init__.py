@@ -7,7 +7,7 @@ signals attached.
 """
 
 from .cache import CachedClient, ResponseCache
-from .clients import LLMClient, OpenAICompatibleClient
+from .clients import LLMClient, OpenAICompatibleClient, OpenRouterClient
 from .errors import JudgeError, ParseError, TwelveAngryError
 from .export import to_hf_dataset, to_jsonl, to_records
 from .judge import Judge
@@ -35,6 +35,7 @@ __all__ = [
     "RankingProtocol",
     "LLMClient",
     "OpenAICompatibleClient",
+    "OpenRouterClient",
     "CachedClient",
     "ResponseCache",
     "to_records",

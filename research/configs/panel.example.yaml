@@ -14,27 +14,21 @@ cache: .tal/cache.sqlite
 judges:
   - name: gpt-4o
     model: openai/gpt-4o-2024-08-06
-    provider: openai
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
+    provider: openrouter
     extra_body:
       provider:
         order: [openai]
         allow_fallbacks: false
   - name: claude-sonnet
     model: anthropic/claude-sonnet-4.5
-    provider: openai
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
+    provider: openrouter
     extra_body:
       provider:
         order: [anthropic]
         allow_fallbacks: false
   - name: qwen-72b
     model: qwen/qwen-2.5-72b-instruct
-    provider: openai
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
+    provider: openrouter
     extra_body:
       provider:
         order: [together]
@@ -42,9 +36,7 @@ judges:
         quantizations: [fp16]
   - name: llama-70b
     model: meta-llama/llama-3.3-70b-instruct
-    provider: openai
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
+    provider: openrouter
     extra_body:
       provider:
         order: [together]
@@ -52,9 +44,7 @@ judges:
         quantizations: [fp16]
   - name: mistral-large
     model: mistralai/mistral-large-2411
-    provider: openai
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
+    provider: openrouter
     extra_body:
       provider:
         order: [mistral]
