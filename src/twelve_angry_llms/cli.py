@@ -21,6 +21,10 @@ defines the judges:
         provider: openai
         base_url: https://openrouter.ai/api/v1
         api_key_env: OPENROUTER_API_KEY
+        extra_body:                       # optional: merged into requests,
+          provider:                       # e.g. OpenRouter provider pinning
+            order: [together]
+            allow_fallbacks: false
 
 API keys are never written in the file - each judge names the environment
 variable holding its key (``api_key_env``), defaulting to OPENAI_API_KEY
@@ -66,6 +70,7 @@ def _load_panel(path: Path) -> tuple[Panel, ResponseCache | None]:
             client = OpenAICompatibleClient(
                 base_url=spec.get("base_url"),
                 api_key_env=spec.get("api_key_env", "OPENAI_API_KEY"),
+                extra_body=spec.get("extra_body"),
             )
         else:
             raise SystemExit(

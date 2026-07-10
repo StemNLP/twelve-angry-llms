@@ -31,14 +31,22 @@ class ResponseCache:
 
     @staticmethod
     def key(
-        model: str, messages: Sequence[Message], temperature: float, max_tokens: int
+        model: str,
+        messages: Sequence[Message],
+        temperature: float,
+        max_tokens: int,
+        salt: str = "",
     ) -> str:
+        """``salt`` carries anything else that changes what serves the
+        request (endpoint, provider routing pins); see ``cache_salt`` on
+        clients."""
         payload = json.dumps(
             {
                 "model": model,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
                 "messages": list(messages),
+                "salt": salt,
             },
             sort_keys=True,
             ensure_ascii=False,
@@ -82,7 +90,8 @@ class CachedClient:
         temperature: float = 0.0,
         max_tokens: int = 1024,
     ) -> str:
-        key = ResponseCache.key(model, messages, temperature, max_tokens)
+        salt = getattr(self._client, "cache_salt", "") or ""
+        key = ResponseCache.key(model, messages, temperature, max_tokens, salt=salt)
         cached = self.cache.get(key)
         if cached is not None:
             self.hits += 1

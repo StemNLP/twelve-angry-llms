@@ -119,6 +119,28 @@ judges:
 With the `data` extra you can annotate the raw (non-binarized) datasets
 directly: `tal annotate --dataset ultrafeedback --limit 1000 ...`.
 
+### Routing all judges through one aggregator
+
+Since the client accepts any OpenAI-compatible `base_url`, the easiest way
+to run a cross-family panel is a single aggregator key (e.g. OpenRouter).
+One caveat: aggregators load-balance open-weight models across hosts with
+different quantizations, which can silently change judge behavior between
+runs. Pin the routing with `extra_body` (merged into every request, and
+part of the response-cache key):
+
+```yaml
+  - model: qwen/qwen-2.5-72b-instruct
+    provider: openai
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    extra_body:
+      provider: {order: [together], allow_fallbacks: false, quantizations: [fp16]}
+```
+
+Use exact-versioned model slugs (not `~latest` aliases) for the same
+reason. See `research/configs/panel.example.yaml` for a fully pinned
+five-judge panel.
+
 ## Reproducibility
 
 - Temperature defaults to 0 everywhere.
