@@ -333,8 +333,9 @@ as follows: `ScoringProtocol` and `RankingProtocol` implement the two elicitatio
 computes per-datapoint IJA (tie-aware Kendall's τ-b by default, Spearman and pairwise-winner
 selectable for the metric ablation) plus the dataset-level diagnostics (Krippendorff's α and
 the judge–judge correlation matrix); the exporter emits TRL's `(prompt, chosen, rejected)`
-schema with `prompt_ija`, `pair_agreement`, and the raw per-judge values; clients cover any
-OpenAI-compatible endpoint plus native Anthropic, with a SQLite response cache and token-usage
+schema with `prompt_ija`, `pair_agreement`, and the raw per-judge values; clients cover
+OpenRouter (the default, with provider/quantization pinning for reproducibility) and any other
+OpenAI-compatible endpoint, with a SQLite response cache and token-usage
 tracking satisfying the §7 rigor items; and raw UltraFeedback/Nectar loaders preserve the
 original scores and ranks in metadata for the margin baselines.
 

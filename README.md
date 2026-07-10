@@ -23,9 +23,8 @@ existing training setup unchanged.
 ## Installation
 
 ```bash
-pip install twelve-angry-llms                # core (OpenAI-compatible providers)
-pip install "twelve-angry-llms[anthropic]"   # + native Anthropic client
-pip install "twelve-angry-llms[data]"        # + raw UltraFeedback / Nectar loaders
+pip install twelve-angry-llms          # core: OpenRouter + any OpenAI-compatible provider
+pip install "twelve-angry-llms[data]"  # + raw UltraFeedback / Nectar loaders
 ```
 
 ## Quickstart
@@ -64,19 +63,17 @@ print(panel.diagnostics(results))  # Krippendorff's alpha, judge-judge correlati
 to_jsonl(to_records(results), "annotated.jsonl")  # TRL schema + IJA columns
 ```
 
-Judges aren't tied to OpenRouter: `OpenAICompatibleClient` speaks to any
-OpenAI-compatible endpoint (OpenAI directly, Together, Groq, a local vLLM
-or Ollama server, ...) via its `base_url`, and `AnthropicClient` (the
-`[anthropic]` extra) talks to the Anthropic API natively. Keys are read
-from environment variables — pass `api_key_env` to point at a different
-variable per provider.
+Judges aren't tied to OpenRouter: `OpenAICompatibleClient` (which
+`OpenRouterClient` is a preconfigured version of) speaks to any
+OpenAI-compatible endpoint — OpenAI directly, Together, Groq, a local vLLM
+or Ollama server, ... — via its `base_url`. Keys are read from environment
+variables; pass `api_key_env` to point at a different variable per
+provider.
 
 ```python
 from twelve_angry_llms import OpenAICompatibleClient
-from twelve_angry_llms.clients import AnthropicClient
 
-openai = OpenAICompatibleClient()                              # OPENAI_API_KEY
-claude = AnthropicClient()                                     # ANTHROPIC_API_KEY
+openai = OpenAICompatibleClient()  # OPENAI_API_KEY
 local = OpenAICompatibleClient(base_url="http://localhost:11434/v1", api_key="-")
 ```
 
@@ -117,11 +114,11 @@ cache: .tal/cache.sqlite
 judges:
   - model: openai/gpt-4o-2024-08-06
     provider: openrouter                 # the default
+  - model: anthropic/claude-sonnet-4.5
+    provider: openrouter
   - model: qwen/qwen-2.5-72b-instruct
     provider: openrouter
-  - model: claude-sonnet-5              # direct provider APIs also work
-    provider: anthropic
-  - model: llama3.1:70b                 # ... as does any OpenAI-compatible endpoint
+  - model: llama3.1:70b                 # any OpenAI-compatible endpoint also works
     provider: openai
     base_url: http://localhost:11434/v1
 ```

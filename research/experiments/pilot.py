@@ -8,7 +8,7 @@ half corrupted, run through a small panel. Its only job is to confirm that
 3. a blatant flip visibly tanks the corrupted pair's agreement.
 
 Usage:
-    export OPENAI_API_KEY=... OPENROUTER_API_KEY=... ANTHROPIC_API_KEY=...
+    export OPENROUTER_API_KEY=...
     uv run python research/experiments/pilot.py --panel research/configs/panel.example.yaml
 """
 

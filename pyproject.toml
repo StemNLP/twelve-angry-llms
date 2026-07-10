@@ -15,9 +15,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-anthropic = ["anthropic>=0.34.0"]
 data = ["datasets>=2.19.0"]
-all = ["twelve-angry-llms[anthropic,data]"]
 
 [project.scripts]
 tal = "twelve_angry_llms.cli:main"

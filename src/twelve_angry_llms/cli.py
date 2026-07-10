@@ -15,21 +15,21 @@ defines the judges:
     judges:
       - model: openai/gpt-4o-2024-08-06
         provider: openrouter              # the default
+      - model: anthropic/claude-sonnet-4.5
+        provider: openrouter
       - model: qwen/qwen-2.5-72b-instruct
         provider: openrouter
         extra_body:                       # optional: merged into requests,
           provider:                       # e.g. OpenRouter provider pinning
             order: [together]
             allow_fallbacks: false
-      - model: claude-sonnet-5            # direct provider APIs also work
-        provider: anthropic
       - model: llama3.1:70b               # any OpenAI-compatible endpoint
         provider: openai
         base_url: http://localhost:11434/v1
 
 API keys are never written in the file - each judge names the environment
-variable holding its key (``api_key_env``), defaulting to OPENAI_API_KEY
-or ANTHROPIC_API_KEY by provider.
+variable holding its key (``api_key_env``), defaulting to OPENROUTER_API_KEY
+or OPENAI_API_KEY by provider.
 """
 
 from __future__ import annotations
@@ -61,13 +61,7 @@ def _load_panel(path: Path) -> tuple[Panel, ResponseCache | None]:
     judges = []
     for spec in config["judges"]:
         provider = spec.get("provider", "openrouter")
-        if provider == "anthropic":
-            from .clients.anthropic_client import AnthropicClient
-
-            client = AnthropicClient(
-                api_key_env=spec.get("api_key_env", "ANTHROPIC_API_KEY")
-            )
-        elif provider == "openrouter":
+        if provider == "openrouter":
             client = OpenRouterClient(
                 api_key_env=spec.get("api_key_env", "OPENROUTER_API_KEY"),
                 extra_body=spec.get("extra_body"),
@@ -81,7 +75,7 @@ def _load_panel(path: Path) -> tuple[Panel, ResponseCache | None]:
         else:
             raise SystemExit(
                 f"Unknown provider {provider!r} "
-                "(use 'openrouter', 'openai', 'openai-compatible', or 'anthropic')"
+                "(use 'openrouter', 'openai', or 'openai-compatible')"
             )
         if cache is not None:
             client = CachedClient(client, cache)

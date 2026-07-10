@@ -17,7 +17,7 @@ folder is the experiment.
 
 ```bash
 uv sync --extra data
-export OPENAI_API_KEY=... ANTHROPIC_API_KEY=... OPENROUTER_API_KEY=...
+export OPENROUTER_API_KEY=...
 uv run python research/experiments/pilot.py --panel research/configs/panel.example.yaml
 ```
 
