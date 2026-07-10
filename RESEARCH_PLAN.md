@@ -209,29 +209,28 @@ question Phase 4 asks about our low-IJA datapoints.
 
 ### Phase 0 — Novelty check *(ongoing)*
 
-Re-run the targeted searches before submission ("inter-judge agreement preference data
-filtering," "rank correlation judges DPO data," "annotator agreement preference label noise
-LLM"). The July 2026 sweep found nothing using per-datapoint panel agreement to curate
-preference data, but this needs a final check close to writing.
+Before submission we re-run the targeted literature searches ("inter-judge agreement
+preference data filtering," "rank correlation judges DPO data," "annotator agreement
+preference label noise LLM"). The July 2026 sweep found nothing that uses per-datapoint panel
+agreement to curate preference data, but the check needs repeating close to writing time.
 
 ### Phase 1 — Controlled corruption study (cheap, and a standalone blog post)
 
-The first real experiment gives IJA a ground truth to be measured against, without any
+The first real experiment gives IJA a ground truth to be measured against, and it needs no
 training runs. We take a set of prompts with their K candidate responses from raw
-UltraFeedback, establish a clean reference ordering on a subset (strong-judge consensus plus
-manual spot-checks), and then inject controlled corruptions whose nature we know exactly:
+UltraFeedback and establish a clean reference ordering on a subset, using strong-judge
+consensus plus manual spot-checks. Then we corrupt some of the datapoints in ways whose
+nature we know exactly, ranging from subtle to blatant: swapping two adjacent-ranked
+responses, flipping a clear winner with a clear loser, replacing one response with an
+off-topic or degenerate one, and padding a weak response with verbosity to see whether IJA
+resists the length bias that a single judge is prone to.
 
-- swapping two adjacent-ranked responses (a subtle error),
-- flipping a clear winner with a clear loser (a blatant error),
-- replacing one response with an off-topic or degenerate one,
-- padding a weak response to test whether IJA resists the length/verbosity bias that a single
-  judge is prone to.
-
-We then run the panel and ask how well IJA detects the corrupted datapoints, measured by AUROC,
-against three comparisons: a single judge's score margin, the panel's mean margin, and chance.
-The most informative result is the **breakdown by corruption type** — our prediction is that
-IJA wins specifically on subtle swaps and length-baiting, where a single confident judge is
-fooled but a diverse panel splits, while blatant flips are caught by margin alone.
+The question is then simply how well IJA separates corrupted datapoints from clean ones. We
+measure that with AUROC and compare it against a single judge's score margin, the panel's
+mean margin, and chance. The most informative result is the **breakdown by corruption type**:
+our prediction is that IJA wins specifically on the subtle swaps and the length-baiting,
+where one confident judge is fooled but a diverse panel splits, while blatant flips are
+caught just as well by margin alone.
 
 On size: roughly 1,000 prompts is enough for the headline AUROC claim (with about half
 corrupted, that is ~500 positives and ~500 negatives, giving a standard error near ±0.015),
@@ -242,41 +241,48 @@ and confirm the metric moves in the expected direction.
 
 ### Phase 2 — Ablations that turn the result into a paper
 
-- **Panel diversity (tests H2):** a cross-family panel versus a same-family panel of equal
-  size. This is the direct answer to the correlated-errors critique.
-- **Panel versus self-consistency:** J different models versus one model sampled J times at
-  temperature > 0. If self-consistency does nearly as well, reviewers will ask, so we answer
-  it up front; this arm also serves as the BSDetector baseline.
-- **Panel size (the "twelve angry" curve):** J = 3, 5, 7, 12, to see where the agreement signal
-  saturates.
-- **Agreement metric:** Kendall's τ-b versus Spearman's ρ versus a simple pairwise-winner
-  agreement, to show robustness to the choice.
-- **Candidate count K:** K = 4 (UltraFeedback) versus K = 7 (Nectar), and the degenerate K = 2
-  case, to characterize how IJA behaves as the ranking gets longer or collapses to a single
-  comparison.
-- Throughout, we report the judge–judge correlation matrix and dataset-level Krippendorff's α
-  as diagnostics of the panel's health.
+Each ablation here answers a question a reviewer would otherwise ask. The most important one
+tests H2 directly: we compare a cross-family panel against a same-family panel of the same
+size, which is the direct answer to the correlated-errors critique. Close behind it is the
+comparison between a genuine panel and self-consistency — J different models versus one model
+sampled J times at temperature above zero. If self-consistency does nearly as well, the whole
+panel apparatus is unnecessary, so we settle that up front; this arm also doubles as the
+BSDetector-style baseline.
+
+The remaining ablations probe the knobs of the method itself. We sweep the panel size
+(J = 3, 5, 7, 12 — the "twelve angry" curve) to see where the agreement signal saturates. We
+swap the agreement metric, comparing Kendall's τ-b against Spearman's ρ and a simple
+pairwise-winner agreement, to show the result is not an artifact of the metric choice. And we
+vary the candidate count, contrasting K = 4 (UltraFeedback) with K = 7 (Nectar) and the
+degenerate K = 2 case, to see how IJA behaves as the ranking grows longer or collapses to a
+single comparison. Throughout all of these we report the judge–judge correlation matrix and
+dataset-level Krippendorff's α as running diagnostics of the panel's health.
 
 ### Phase 3 — Downstream DPO validation (expensive; only if Phases 1–2 hold)
 
-Here we test whether filtering on IJA actually produces better models. We start from the full
-raw UltraFeedback pool and compare selection policies: no filter, margin filter, IJA filter,
-the intersection of margin and IJA, IJA used as a soft label, and a random-drop control that
-holds the data budget fixed so we are not just measuring the effect of training on less data.
-For each policy we fine-tune a small model (Qwen2.5-1.5B or Llama-3.2-1B) with
-length-normalized DPO following the Zephyr/UltraFeedback recipe, across three seeds, and report
-confidence intervals rather than single-run deltas. Evaluation uses AlpacaEval-2 (length-
-controlled), MT-Bench, and IFEval, plus the RewardBench-style accuracy of a reward model
-trained on each filtered set. The evaluation judges must be disjoint from the panel to avoid
-circularity, and the bar to clear is the "robust to label flipping" null result from §5.
+This is where we test whether filtering on IJA actually produces better models. Starting from
+the full raw UltraFeedback pool, we compare six ways of selecting the training data: keeping
+everything, filtering by margin, filtering by IJA, filtering by the intersection of the two,
+using IJA as a soft label rather than a filter, and dropping datapoints at random. The
+random-drop control holds the data budget fixed, so that any gain we see comes from *which*
+datapoints were removed rather than from training on less data. For each policy we fine-tune
+a small model (Qwen2.5-1.5B or Llama-3.2-1B) with length-normalized DPO following the
+Zephyr/UltraFeedback recipe, run three seeds, and report confidence intervals rather than
+single-run deltas. We evaluate on length-controlled AlpacaEval-2, MT-Bench, and IFEval, and
+we additionally train a reward model on each filtered set and report its RewardBench-style
+accuracy. Two constraints frame the whole phase: the evaluation judges must be disjoint from
+the panel, or the comparison becomes circular, and the improvement has to clear the "robust
+to label flipping" null result from §5.
 
 ### Phase 4 — Human validation (runs in parallel with Phase 3)
 
-We take ~200–300 prompts stratified by their IJA value and have 2–3 people, blind to the panel,
-rank the same K responses. This answers whether low IJA really tracks genuine human
-disagreement (i.e., legitimate ambiguity in the Plank sense) versus judge failure, and whether
-high IJA corresponds to labels humans agree are correct. The distinction matters for how a
-practitioner should treat low-IJA data — drop it, or keep it with a soft label.
+Finally, we check the signal against people. We take roughly 200–300 prompts, stratified by
+their IJA value, and ask two or three human annotators — blind to what the panel said — to
+rank the same K responses. The question is what low IJA actually means: genuine human
+disagreement, which would make it legitimate ambiguity in the Plank sense, or judge failure
+on datapoints humans find easy. The answer decides how a practitioner should treat low-IJA
+data — drop it, or keep it with a soft label — and tells us whether high IJA really marks
+labels that humans agree are correct.
 
 ## 7. Rigor checklist
 
