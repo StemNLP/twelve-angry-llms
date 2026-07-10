@@ -35,8 +35,9 @@ correlation over all C(J,2) judge pairs.
 We use **Kendall's τ-b** as the rank correlation rather than Spearman's ρ, for three reasons.
 First, K is small (often just 4), and on so few items Spearman's ρ is jumpy and takes only a
 handful of discrete values, whereas Kendall's τ counts concordant versus discordant response
-pairs and behaves more stably. Second, judges emit 1–5 scores, so ties among the K responses
-are common, and the "-b" variant of τ has a proper correction for ties. Third, τ has a direct
+pairs and behaves more stably. Second, under the scoring protocol judges emit 1–5 scores, so
+ties among the K responses are common, and the "-b" variant of τ has a proper correction for
+ties (under the ranking protocol judges produce total orders, where τ-b reduces to plain τ). Third, τ has a direct
 reading that matches what we care about: it is essentially the fraction of response-pairs that
 two judges order the same way, which *is* preference agreement. We still report Spearman's ρ
 in the ablations so that readers can see the result is not an artifact of the metric choice.
@@ -85,7 +86,8 @@ panel at a stage that already exists. Second, almost everyone ultimately trains 
 emits exactly that schema, with IJA carried alongside as extra metadata columns:
 `prompt_ija` (the Kendall τ-b agreement over the K candidates), `pair_agreement` (the fraction
 of judges that preferred the chosen response over the rejected one), and the raw per-judge
-scores. A practitioner can then filter or weight on those columns and run their existing DPO
+scores or rankings. A practitioner can then filter or weight on those columns and run their
+existing DPO
 setup unchanged.
 
 The `pair_agreement` column is also directly usable as a **soft label**: instead of treating
@@ -99,12 +101,37 @@ natural but separate line of work, noted here as future direction (§8).
 Because the mentioned datasets used a single judge, we cannot calculate IJA off them. We have to run
 the panel ourselves. We start with judging a thousand prompts with several models.
 
-**One shared rubric across all judges.** Every judge receives the *same* scoring guideline. The definition of what a score of 1 through 5 means and is asked to score the K responses against it. We do not reuse each dataset's original judge prompt. We create a unified one for all judges. UltraFeedback releases its full annotation template (in
-`src/data_annotation/preference_templates.py`), so we adopt that as the canonical shared rubric;
+**One shared rubric across all judges.** Within a dataset, every judge receives the *same* guideline — the definition of what a score of 1 through 5 means (scoring protocol) or the criteria by which responses are to be ordered (ranking protocol) — so that disagreement reflects the judges, not prompt wording. We do not give different judges different prompts. UltraFeedback releases its full annotation template 
+(in `src/data_annotation/preference_templates.py`), so we adopt that as the canonical rubric for the scoring protocol;
+
 Nectar publishes only an excerpt of its rubric and defers the position-bias handling to an
-unreleased writeup, so it cannot serve as a reproducible template. We standardize on
-per-response 1–5 scoring (the UltraFeedback style) rather than direct K-wise ranking, because
-scoring also yields the single-judge score margin we need for the margin baseline for free.
+unreleased writeup, so it cannot serve as a reproducible template; for the ranking protocol
+we write a single explicit ranking instruction shared by all judges instead.
+
+**Elicitation matches each dataset's native style.** Rather than forcing one protocol on
+both datasets, the panel judges each dataset the way its original pipeline did: on
+UltraFeedback the judges score each response 1–5 against the shared rubric (per-response
+scoring, the UltraFeedback style), and on Nectar the judges rank the seven responses
+directly in one pass (K-wise ranking, the Nectar style). This keeps our panel labels
+directly comparable to each dataset's published labels and means the downstream DPO
+experiments consume data produced under the same elicitation the dataset was built with.
+
+Both protocols induce a per-judge ranking of the K responses, so the IJA computation
+(pairwise Kendall τ-b, averaged over judge pairs) is identical in both cases. Two
+consequences of this choice are worth stating explicitly.
+
+*First*, IJA values are compared
+*within* a dataset, never pooled across datasets: scoring produces tie-heavy rankings while
+K-wise ranking produces total orders, so the two IJA scales are not interchangeable, and
+any cross-dataset IJA difference would partly reflect the protocol rather than the data.
+
+*Second*, the single-judge margin baseline is protocol-specific: on UltraFeedback it is the
+score gap between chosen and rejected, and on Nectar it is the rank-position gap in the
+judge's ordering.
+
+**Protocol ablation.** On a Nectar subset the same panel also runs the scoring protocol, so
+we can check that the two protocols flag substantially the same low-agreement datapoints
+i.e. that IJA measures a property of the data rather than of the elicitation format.
 
 **Fixed candidate strings.** Every judge must score the identical K response texts for a given
 prompt, so that any disagreement reflects the judges and not drift in the inputs.
@@ -113,9 +140,9 @@ prompt, so that any disagreement reflects the judges and not drift in the inputs
 run in which one panel member uses that exact template, letting us confirm our pipeline
 reproduces the published GPT-4 labels before we introduce the rest of the panel.
 
-## 5. Related work and where we sit
+## 5. Related work and positioning
 
-**The problem is real and quantified.** Human annotators only agree on preference judgments
+**The problem is well-known and quantified.** Human annotators only agree on preference judgments
 about 60–75% of the time, and disagree on 30–50% of the subtle comparisons; the
 [data-centric RLHF metrics paper](https://arxiv.org/pdf/2409.09603) explicitly floats
 annotator disagreement as a filter for low-quality preference data but does not build one.
