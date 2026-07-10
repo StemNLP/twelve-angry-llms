@@ -25,12 +25,19 @@ existing training setup unchanged.
 
 ## Installation
 
+Add it to a [uv](https://docs.astral.sh/uv/) project:
+
 ```bash
 uv add twelve-angry-llms            # core: OpenRouter + any OpenAI-compatible provider
 uv add "twelve-angry-llms[data]"    # + raw UltraFeedback / Nectar loaders
 ```
 
-(or `pip install twelve-angry-llms` if you're not on [uv](https://docs.astral.sh/uv/) yet)
+or install into the current environment:
+
+```bash
+uv pip install twelve-angry-llms    # uv's pip interface
+pip install twelve-angry-llms      # plain pip works too
+```
 
 ## Quickstart
 
