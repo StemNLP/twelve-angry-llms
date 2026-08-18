@@ -56,7 +56,7 @@ This matters because label unreliability accounts for
 many of the known failures of preference training: contradictory pairs pull the policy in
 arbitrary directions, and DPO in particular is known to degrade under label noise.
 
-## 2. Hypotheses
+## 2. Hypothesis
 
 **H1 (core claim).** IJA measures preference-label reliability. Datapoints where the panel
 disagrees produce noisy chosen/rejected pairs, and using IJA to filter, down-weight, or
@@ -64,10 +64,12 @@ soft-label those pairs improves DPO outcomes compared with (a) doing no filterin
 standard practice of margin-based filtering (keeping only pairs where a single judge assigned
 a large score gap).
 
-**H2 (diversity claim).** A panel of judges drawn from *different* model families produces
-more informative IJA than a same-family panel of the same size, or than a single model sampled
-K times. The reasoning is that judges sharing a base model tend to make correlated errors and
-agree on their shared blind spots, which inflates agreement without adding information.
+**A note on panel selection.** We draw the judges from different model families (OpenAI,
+Anthropic, Qwen, Llama, Mistral) because judges sharing a base model tend to make correlated
+errors and agree on their shared blind spots, which inflates agreement without adding
+information. We treat this as a design principle rather than a hypothesis to test, and
+monitor it through the judge–judge correlation matrix and Krippendorff's α that every run
+reports.
 
 ## 3. How this integrates with real training pipelines
 
@@ -85,39 +87,59 @@ summarizes the shapes that matter.
 | HelpSteer2 | 1 | scalar attribute ratings | regression RM |
 | GRPO (DeepSeek) | K on-policy samples | reward per sample | group-normalized advantage |
 
-Two things follow from this. First, judging four or more candidates per prompt is already the
-norm upstream, so IJA does not ask anyone to change how they generate data — it inserts a
-panel at a stage that already exists. Second, almost everyone ultimately trains through the
-`(prompt, chosen, rejected)` interface that TRL's `DPOTrainer` expects. Our exporter therefore
-emits exactly that schema, with IJA carried alongside as extra metadata columns:
-`prompt_ija` (the Kendall τ-b agreement over the K candidates), `pair_agreement` (the fraction
-of judges that preferred the chosen response over the rejected one), and the raw per-judge
-scores or rankings. A practitioner can then filter or weight on those columns and run their
-existing DPO
-setup unchanged.
+Two things follow from this:
 
-The `pair_agreement` column is also directly usable as a **soft label**: instead of treating
-every pair as a hard 1/0 preference, methods like conservative DPO or
-[geometric-averaged preference optimization](https://arxiv.org/pdf/2409.06691) can consume the
-fraction directly. Extending IJA to gate or scale per-prompt rewards inside GRPO-style RL is a
-natural but separate line of work, noted here as future direction (§8).
+First, judging four or more candidates per prompt is already the
+norm upstream, so IJA integrates well into how people generate data.
+
+Second, almost everyone ultimately trains through the
+`(prompt, chosen, rejected)` interface that the `DPOTrainer` of TRL (Hugging Face's post-training library) expects. Our exporter therefore
+emits exactly that schema, with IJA carried alongside as extra metadata columns:
+`prompt_ija` (the agreement over the K candidates), `pair_agreement` (the fraction
+of judges that preferred the chosen response over the rejected one), and the raw per-judge
+scores or rankings.
+
+The `pair_agreement` column also serves as a **soft label**. Conservative DPO (cDPO) assumes
+each pair is mislabeled with probability ε (label noise) and trains on:
+
+> L = (1 − ε) · L_DPO(chosen ≻ rejected) + ε · L_DPO(rejected ≻ chosen),
+
+which reduces to plain DPO at ε = 0 and cancels the pair entirely at ε = 0.5 — but ε is
+normally a single global hyperparameter set for the whole dataset. 
+
+The panel of judges, however, enables us to
+estimate it per datapoint: if p = `pair_agreement` is the fraction of judges preferring the
+chosen response, then ε̂ = 1 − p. A unanimous pair (p = 1) trains at full strength; a 3–2
+split (ε̂ = 0.4) contributes close to zero. The same fraction can feed [geometric-averaged preference optimization](https://arxiv.org/pdf/2409.06691), which weights each pair's gradient by label confidence. 
+
+Extending IJA to GRPO-style RL is a natural but separate line of work, we reserved as future direction (§8).
 
 ## 4. The judging protocol
 
 Because the mentioned datasets used a single judge, we cannot calculate IJA off them. We have to run
 the panel ourselves. We start with judging a thousand prompts with several models.
 
-**One shared rubric across all judges.** Within a dataset, every judge receives the *same* guideline — the definition of what a score of 1 through 5 means (scoring protocol) or the criteria by which responses are to be ordered (ranking protocol) — so that disagreement reflects the judges, not prompt wording. We do not give different judges different prompts. UltraFeedback releases its full annotation template 
+**One shared rubric across all judges.** Within a dataset, every judge receives the *same* guideline that includes:
+
+- The definition of what a score of 1 through 5 means (scoring protocol) 
+
+- The criteria by which responses are to be ordered (ranking protocol)
+ 
+We do not give different judges different prompts. 
+
+UltraFeedback releases its full annotation template 
 (in `src/data_annotation/preference_templates.py`), so we adopt that as the canonical rubric for the scoring protocol;
 
 Nectar publishes only an excerpt of its rubric and defers the position-bias handling to an
-unreleased writeup, so it cannot serve as a reproducible template; for the ranking protocol
-we write a single explicit ranking instruction shared by all judges instead.
+unreleased writeup, so it cannot serve as a reproducible template; for the ranking protocol we write a single explicit ranking instruction shared by all judges instead.
 
-**Elicitation matches each dataset's native style.** Rather than forcing one protocol on
-both datasets, the panel judges each dataset the way its original pipeline did: on
-UltraFeedback the judges score each response 1–5 against the shared rubric (per-response
-scoring, the UltraFeedback style), and on Nectar the judges rank the seven responses
+**Matching each dataset's native style.** Rather than forcing one protocol on
+both datasets, the panel judges each dataset the way its original pipeline did:
+
+**UltraFeedback** the judges score each response 1–5 against the shared rubric (per-response
+scoring, the UltraFeedback style).
+ 
+ **Nectar** the judges rank the seven responses
 directly in one pass (K-wise ranking, the Nectar style). This keeps our panel labels
 directly comparable to each dataset's published labels and means the downstream DPO
 experiments consume data produced under the same elicitation the dataset was built with.
@@ -144,62 +166,49 @@ prompt, so that any disagreement reflects the judges and not drift in the inputs
 
 ## 5. Related work and positioning
 
-**The problem is well-known and quantified.** Human annotators only agree on preference judgments
-about 60–75% of the time, and disagree on 30–50% of the subtle comparisons; the
-[data-centric RLHF metrics paper](https://arxiv.org/pdf/2409.09603) explicitly floats
-annotator disagreement as a filter for low-quality preference data but does not build one.
+**The problem is well-known.** Human annotators agree on preference judgments only about
+60–75% of the time; the [data-centric RLHF metrics paper](https://arxiv.org/pdf/2409.09603)
+floats annotator disagreement as a filter for low-quality preference data but does not
+build one.
 
-Work such as [provably robust DPO](https://arxiv.org/pdf/2403.00409) and
-[soft preference labels](https://arxiv.org/pdf/2409.06691) changes the loss so that noisy
-labels hurt less. This is complementary to us: while they confirm that the noise exists,
-they cope with it during training, we
-identify it beforehand. But our soft-label output feeds directly into their methods.
-Concretely, each of these losses has a per-pair uncertainty knob that the method itself
-cannot measure. Conservative and provably robust DPO model each label as flipped with some
-probability ε, but because standard datasets ship only hard chosen/rejected labels, ε has to
-be set as a single global hyperparameter — guessed, or tuned by sweep — and applied uniformly
-to clean and noisy pairs alike. Soft-label methods like geometric-averaged preference
-optimization go further and consume a per-pair probability p that the chosen response really
-is preferred, but in their experiments p comes from simulated annotators, since real datasets
-do not provide it. Our `pair_agreement` column is precisely the missing measurement: the
-fraction of panel judges preferring chosen over rejected is a direct per-datapoint estimate
-of their p (equivalently, ε̂ = 1 − `pair_agreement`). Plugging it in requires no change to
-their loss code — it upgrades a global guessed constant into a measured per-example quantity,
-and gives us a third way to use IJA in Phase 3 (soft-labeling) alongside filtering and
-down-weighting.
+**Noise-robust losses.** [Provably robust DPO](https://arxiv.org/pdf/2403.00409) and
+[soft preference labels](https://arxiv.org/pdf/2409.06691) change the loss so that noisy
+labels hurt less — complementary to us: they cope with noise during training, we identify it
+beforehand. Each has an uncertainty knob the method itself cannot measure: robust/conservative
+DPO's flip probability ε is a global guessed hyperparameter, and geometric-averaged
+preference optimization consumes a per-pair probability p that in their experiments comes
+from *simulated* annotators. `pair_agreement` is that missing measurement — p directly, or
+ε̂ = 1 − p (§3) — upgrading a global constant to a measured per-example quantity with no
+change to their loss code, and giving Phase 3 its third arm (soft-labeling) alongside
+filtering and down-weighting.
 
-**Counterargument against this hypothesis.** A recent
+**Counterargument.** A recent
 [preference-dataset curation study](https://arxiv.org/pdf/2511.10985) reports that
-UltraFeedback and LMSYS are "fairly robust to label flipping," meaning DPO may simply shrug
-off the very noise we propose to filter. Phase 3 has to show a real gain over both no
-filtering and margin filtering, or the whole thesis is in doubt — so this is the paper to
-argue against directly.
+UltraFeedback and LMSYS are "fairly robust to label flipping" — DPO may simply shrug off the
+noise we propose to filter. Phase 3 must show a real gain over no filtering and margin
+filtering, or the thesis fails; this is the paper to argue against directly.
 
 **Closest mechanisms.** [Reward-model ensembles](https://arxiv.org/html/2310.02743v2) use
-disagreement among reward models to estimate uncertainty, but during RL rather than for
-dataset curation, and their ensembles usually share a base model — which is exactly the
-correlated-judge situation H2 warns about. Margin-based filtering is the standard, cheap
-baseline; note that a large margin from a *single* judge can still be contested across a
-panel, which is precisely the gap IJA is meant to catch.
-[Cross-model disagreement for uncertainty quantification](https://arxiv.org/pdf/2604.17112)
-uses the same mechanism as us but for QA/hallucination detection, not training-data curation,
-and BSDetector-style confidence filtering (surveyed in
-[Data Tsunami](https://arxiv.org/html/2408.02085v3)) relies on a single model's
-self-consistency — which our self-consistency ablation reproduces as a baseline.
+disagreement for uncertainty, but during RL rather than dataset curation, and usually share
+a base model — the correlated-judge situation §2 avoids. Margin filtering is the standard
+cheap baseline, but a large margin from a *single* judge can still be contested across a
+panel — the gap IJA catches.
+[Cross-model disagreement](https://arxiv.org/pdf/2604.17112) applies our mechanism to
+QA/hallucination detection instead, and BSDetector-style confidence filtering (surveyed in
+[Data Tsunami](https://arxiv.org/html/2408.02085v3)) uses a single model's self-consistency —
+reproduced as our baseline ablation.
 
-**Panels and agreement measurement.** [PoLL](https://arxiv.org/html/2404.18796v1) established
-that cross-family panels beat a single strong judge for *model* evaluation, but it aggregates
-the panel and discards the disagreement we care about. [Nine Judges, Two Effective
-Votes](https://arxiv.org/html/2605.29800) is the sharpest warning to us: judges make
-correlated errors, so a nine-judge panel can carry the information of only about two
-independent votes — this is the main threat to H1 and the motivation for H2. The idea of
-reading per-item agreement as signal is well precedented in the human-annotation literature:
-Krippendorff's α is built from per-unit pairwise disagreement, ChaosNLI (Nie et al. 2020) uses
-per-item label entropy, CrowdTruth defines per-unit ambiguity, and
-[Uma et al. 2021](https://www.jair.org/index.php/jair/article/view/12752) survey the area.
-Plank's [work on human label variation](https://arxiv.org/pdf/2211.02570) reminds us that
-disagreement is sometimes legitimate ambiguity rather than error, which is exactly the
-question Phase 4 asks about our low-IJA datapoints.
+**Panels and agreement measurement.** [PoLL](https://arxiv.org/html/2404.18796v1) showed
+cross-family panels beat a single strong judge for *model* evaluation, but aggregates away
+the disagreement we care about. [Nine Judges, Two Effective
+Votes](https://arxiv.org/html/2605.29800) is the sharpest warning: correlated errors can
+reduce nine judges to about two independent votes — the main threat to H1 and the reason for
+cross-family selection (§2). Reading per-item agreement as signal is well precedented in
+human annotation — Krippendorff's α, ChaosNLI's per-item label entropy (Nie et al. 2020),
+CrowdTruth's per-unit ambiguity, surveyed by
+[Uma et al. 2021](https://www.jair.org/index.php/jair/article/view/12752) — and
+[Plank](https://arxiv.org/pdf/2211.02570) reminds us disagreement can be legitimate ambiguity
+rather than error, exactly what Phase 4 asks about our low-IJA datapoints.
 
 ### Novelty statement (draft)
 
@@ -207,8 +216,8 @@ question Phase 4 asks about our low-IJA datapoints.
 > scores into chosen/rejected pairs, discarding any notion of disagreement. We instead run a
 > diverse panel and treat per-prompt cross-judge rank agreement (average pairwise Kendall's
 > τ-b) as an explicit label-reliability signal. We show it flags corrupted and contested
-> preference labels that margin-based filtering misses, quantify how panel diversity governs
-> the signal, and export it as metadata on the standard `(prompt, chosen, rejected)` schema so
+> preference labels that margin-based filtering misses, and export it as metadata on the
+> standard `(prompt, chosen, rejected)` schema so
 > that it composes with any DPO or reward-model trainer.
 
 ## 6. Experimental phases
@@ -248,12 +257,11 @@ and confirm the metric moves in the expected direction.
 ### Phase 2 — Ablations that turn the result into a paper
 
 Each ablation here answers a question a reviewer would otherwise ask. The most important one
-tests H2 directly: we compare a cross-family panel against a same-family panel of the same
-size, which is the direct answer to the correlated-errors critique. Close behind it is the
-comparison between a genuine panel and self-consistency — J different models versus one model
-sampled J times at temperature above zero. If self-consistency does nearly as well, the whole
-panel apparatus is unnecessary, so we settle that up front; this arm also doubles as the
-BSDetector-style baseline.
+is the comparison between a genuine panel and self-consistency — J different models versus
+one model sampled J times at temperature above zero. If self-consistency does nearly as
+well, the whole panel apparatus is unnecessary, so we settle that up front; this arm also
+doubles as the BSDetector-style baseline and is the cheap stand-in for the correlated-errors
+critique (§2).
 
 The remaining ablations probe the knobs of the method itself. We sweep the panel size
 (J = 3, 5, 7, 12 — the "twelve angry" curve) to see where the agreement signal saturates. We

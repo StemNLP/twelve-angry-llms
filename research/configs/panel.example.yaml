@@ -1,4 +1,4 @@
-# Default five-judge cross-family panel (see RESEARCH_PLAN.md §1 and H2).
+# Default five-judge cross-family panel (see RESEARCH_PLAN.md §2, panel selection).
 #
 # All judges route through OpenRouter: one key, one bill, unified cost
 # accounting. Reproducibility (plan §7) is preserved by pinning: every model
