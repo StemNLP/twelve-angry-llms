@@ -1,8 +1,13 @@
 # Research Plan: Inter-Judge Agreement as a Reliability Signal for Preference Data
 
-*Working title: "Twelve Angry LLMs: Judge Agreement as a Label-Reliability Signal for Preference Data"*
-*Versions*
+*Twelve Angry LLMs: Judge Agreement as a Label-Reliability Signal for Preference Data*
+
+**Versions**
+
+v0.5 — 2026-08-18
+
 v0.4 — 2026-08-14
+
 v0.3 — 2026-07-09
 
 ## 1. The core idea
