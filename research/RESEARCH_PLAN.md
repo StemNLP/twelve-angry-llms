@@ -1,26 +1,29 @@
 # Research Plan: Inter-Judge Agreement as a Reliability Signal for Preference Data
 
 *Working title: "Twelve Angry LLMs: Judge Agreement as a Label-Reliability Signal for Preference Data"*
-*Status: draft v0.3 (preference-data framing, prose pass) — 2026-07-09*
+*Versions*
+v0.4 — 2026-08-14
+v0.3 — 2026-07-09
 
 ## 1. The core idea
 
 Modern preference datasets are built by showing a language model a prompt together with
-several candidate responses and asking a single strong judge (almost always GPT-4 or GPT-4o)
-to score or rank them. Those scores are then collapsed into a single `(chosen, rejected)`
-pair that gets used for DPO or reward-model training. Our claim is that the collapsing step
-throws away a useful signal, and that we can recover it by replacing the single judge with a
-**panel** of diverse judges and measuring how much they agree with each other on each
-datapoint.
+several candidate responses and asking a single strong judge (most existing datasets have asked almost always GPT-4 or GPT-4o) to score or rank them. Those scores are then typically collapsed into a single `(chosen, rejected)` pair that gets used for DPO or reward-model training.
 
-We call that per-datapoint quantity the **inter-judge agreement (IJA)**. The intuition is: if five different models all rank four candidate responses in nearly the same order, the resulting preference label is trustworthy; if they disagree sharply, the label is shaky and is likely to inject noise into training. IJA is therefore a measure of *label
-reliability*, computed cheaply and automatically, before any training happens.
+Our claim is that the collapsing step throws away a useful signal, and that we can recover it by replacing the single judge with a **panel** of diverse judges and measuring how much they agree with each other on each datapoint. That single-judge labels
+are fragile is not hypothetical: UltraFeedback circulates in two binarizations
+([HuggingFaceH4](https://huggingface.co/datasets/HuggingFaceH4/ultrafeedback_binarized), and
+[Argilla's cleaned re-binarization](https://huggingface.co/datasets/argilla/ultrafeedback-binarized-preferences-cleaned)
+after corrupted overall scores were found) that disagree on which response is "chosen" for
+many prompts.
+
+This idea is borrowed from inter-annotator agreement (IAA), the standard way of assessing label reliability in human annotation; we carry it over to LLM judges and call it **inter-judge agreement (IJA)**. The intuition is: if five different models all rank four candidate responses in nearly the same order, the resulting preference label is trustworthy; if they disagree sharply, the label is shaky and is likely to inject noise into training. IJA is therefore a measure of *label reliability*, computed cheaply and automatically, before model training.
 
 ### What the target datapoint looks like
 
 A preference datapoint is a prompt together with K candidate responses, where K is typically
 4 or more. This is the shape data takes at the *judging stage* of the standard pipelines
-(UltraFeedback, Nectar). Importantly, most of these datasets ship in a reduced binary form (i.e. just the chosen and rejected response) because the K candidates were scored and then
+(UltraFeedback, Nectar). Importantly, most of these datasets are published in a reduced binary form (i.e. just the chosen and rejected response) because the K candidates were scored and then
 collapsed. To compute IJA we need the K candidates back, so we work from the **raw**,
 non-binarized releases that still contain them. Raw UltraFeedback keeps all four completions
 and is our primary source; Nectar keeps seven.
@@ -37,18 +40,21 @@ First, K is small (often just 4), and on so few items Spearman's ρ is jumpy and
 handful of discrete values, whereas Kendall's τ counts concordant versus discordant response
 pairs and behaves more stably. Second, under the scoring protocol judges emit 1–5 scores, so
 ties among the K responses are common, and the "-b" variant of τ has a proper correction for
-ties (under the ranking protocol judges produce total orders, where τ-b reduces to plain τ). Third, τ has a direct
-reading that matches what we care about: it is essentially the fraction of response-pairs that
+ties (under the ranking protocol judges produce total orders, where τ-b reduces to plain τ). Third, τ has a direct reading that matches what we care about: it is essentially the fraction of response-pairs that
 two judges order the same way, which *is* preference agreement. We still report Spearman's ρ
 in the ablations so that readers can see the result is not an artifact of the metric choice.
 
 J (the number of judges) is itself a variable of the study; we sweep it in Phase 2 and use a
 default panel of five judges elsewhere.
 
-### Why this framing is the right one
+### Why this framing is justified
 
-Agreement between judges on the ranking is a direct measure
-of how reliable the training label is, with no separate "goodness" axis to worry about. A practical example is the use of this method to filter out training datapoints based on their reliability level. A strict filtering can be applied for example in critical domains to ensure the the training data was highly reliable.
+Agreement between judges is a direct measure of how *reliable* the training label is. We are not measuring whether the judges are *correct* — that would require an external ground truth about response quality, which we do not have, but we also do not need ath this stage and for the purpose of this research. If five independent judges order the responses the same way, the label is stable
+and reproducible; if they largely disagree, the label is unreliable. 
+
+This matters because label unreliability accounts for
+many of the known failures of preference training: contradictory pairs pull the policy in
+arbitrary directions, and DPO in particular is known to degrade under label noise.
 
 ## 2. Hypotheses
 
